@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .debug-info {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="debug-info">
+        <h1>Debug Information</h1>
+        <p class="status">✅ Static files are loading correctly</p>
+        <p>Current URL: <span id="currentUrl"></span></p>
+        <p>User Agent: <span id="userAgent"></span></p>
+        <p>Timestamp: <span id="timestamp"></span></p>
+        
+        <h2>Test Links</h2>
+        <p><a href="/">Go to Main App</a></p>
+        <p><a href="/#/">Go to Hash Route</a></p>
+        <p><a href="/Student_A-Part/">Go to Base Path</a></p>
+        
+        <h2>Console Test</h2>
+        <p>Check browser console for any errors</p>
+    </div>
+    
+    <script>
+        document.getElementById('currentUrl').textContent = window.location.href;
+        document.getElementById('userAgent').textContent = navigator.userAgent;
+        document.getElementById('timestamp').textContent = new Date().toISOString();
+        
+        console.log('Debug page loaded successfully');
+        console.log('Current location:', window.location);
+        console.log('Environment check complete');
+    </script>
+</body>
+</html>
