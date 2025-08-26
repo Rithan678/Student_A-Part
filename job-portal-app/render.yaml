@@ -1,0 +1,34 @@
+# render.yaml - starter manifest for deploying Study A-Part to Render
+# Customize the name, repo, and env vars in the Render dashboard after connecting your repo.
+# This manifest defines two services: backend (Node Web Service) and frontend (Static Site).
+
+services:
+  - type: web
+    name: study-a-part-backend
+    env: node
+    plan: free
+    root: backend
+    buildCommand: "npm install"
+    startCommand: "npm run start"
+    autoDeploy: true
+    # Use env vars in the Render dashboard for DB credentials and S3 keys
+
+  - type: static_site
+    name: study-a-part-frontend
+    repo: ""
+    root: frontend
+    buildCommand: "npm install && npm run build"
+    publishPath: "frontend/build"
+    autoDeploy: true
+
+databases:
+  - name: study-a-part-db
+    engine: mysql
+    plan: free
+    # Render will provision a managed MySQL instance; after creation copy the
+    # connection details into the backend service's environment variables.
+
+# Notes:
+# - Fill `repo` if you want Render to know your remote repository URL; otherwise connect via Render UI.
+# - Create a managed database separately (Render dashboard) or provide external DB connection env vars.
+# - Add environment variables in Render dashboard (see DEPLOY_RENDER.md in repo).

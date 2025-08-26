@@ -16,8 +16,9 @@ try { jobAppsRoutes = require('./routes/job-applications'); } catch (e) { consol
 try { eventAppsRoutes = require('./routes/event-applications'); } catch (e) { console.warn('event-applications routes not found'); }
 
 // Enable CORS for your React frontend
+const FRONTEND_URL = process.env.FRONTEND_URL || process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: FRONTEND_URL,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']

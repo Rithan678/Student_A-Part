@@ -5,6 +5,21 @@ const path = require('path');
 const fs = require('fs');
 const { pool } = require('../config/database');
 
+// Optional S3 support
+let s3Client = null;
+let S3_BUCKET = process.env.S3_BUCKET || null;
+if (process.env.S3_BUCKET && process.env.S3_REGION && process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY) {
+  const { S3Client } = require('@aws-sdk/client-s3');
+  s3Client = new S3Client({
+    region: process.env.S3_REGION,
+    credentials: {
+      accessKeyId: process.env.S3_ACCESS_KEY_ID,
+      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+    }
+  });
+  S3_BUCKET = process.env.S3_BUCKET;
+}
+
 const router = express.Router();
 
 // Configure multer for file uploads
@@ -57,6 +72,29 @@ router.post('/signup', upload.single('collegeIdPdf'), async (req, res) => {
         return res.status(400).json({ error: 'Missing required student fields or college ID PDF' });
       }
 
+      // If S3 is configured, upload the file to S3 and remove local file
+      let storedPath = req.file.filename; // default: local filename
+      if (s3Client) {
+        try {
+          const { PutObjectCommand } = require('@aws-sdk/client-s3');
+          const fileStream = fs.createReadStream(req.file.path);
+          const key = `college-ids/${req.file.filename}`;
+          await s3Client.send(new PutObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: key,
+            Body: fileStream,
+            ContentType: 'application/pdf'
+          }));
+          // remove local file after upload
+          try { fs.unlinkSync(req.file.path); } catch(e) { /* ignore */ }
+          storedPath = key; // store S3 key in DB
+          console.log('✅ Uploaded college ID to S3 as', key);
+        } catch (s3Err) {
+          console.error('❌ S3 upload failed, falling back to local file:', s3Err);
+          // keep storedPath as local filename
+        }
+      }
+
       // Check if email already exists in ANY table
       const [existingUser] = await pool.execute(
         'SELECT id FROM users WHERE email = ? UNION SELECT id FROM approved_students WHERE email = ? UNION SELECT id FROM owner_users WHERE email = ?',
@@ -71,7 +109,7 @@ router.post('/signup', upload.single('collegeIdPdf'), async (req, res) => {
       const [result] = await pool.execute(
         `INSERT INTO users (name, email, password, date_of_birth, college_id, student_college_id, pdf_path, verification_status) 
          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
-        [name, email, hashedPassword, dateOfBirth, collegeId, studentCollegeId, req.file.filename]
+        [name, email, hashedPassword, dateOfBirth, collegeId, studentCollegeId, storedPath]
       );
 
       console.log('✅ Student registered in users table (pending approval):', result.insertId);

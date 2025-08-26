@@ -3,6 +3,21 @@ const path = require('path');
 const fs = require('fs');
 const { pool } = require('../config/database');
 
+// Optional S3 support (mirror of auth.js behavior)
+let s3Client = null;
+let S3_BUCKET = process.env.S3_BUCKET || null;
+if (process.env.S3_BUCKET && process.env.S3_REGION && process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY) {
+  const { S3Client } = require('@aws-sdk/client-s3');
+  s3Client = new S3Client({
+    region: process.env.S3_REGION,
+    credentials: {
+      accessKeyId: process.env.S3_ACCESS_KEY_ID,
+      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+    }
+  });
+  S3_BUCKET = process.env.S3_BUCKET;
+}
+
 const router = express.Router();
 
 // DEBUG: Check what we actually imported
@@ -84,9 +99,19 @@ router.post('/reject-student/:id', async (req, res) => {
     }
     
     if (studentRows[0].pdf_path) {
-      const pdfPath = path.join(__dirname, '../uploads', studentRows[0].pdf_path);
-      if (fs.existsSync(pdfPath)) {
-        fs.unlinkSync(pdfPath);
+      const stored = studentRows[0].pdf_path;
+      if (s3Client && stored.startsWith('college-ids/')) {
+        try {
+          const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+          await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: stored }));
+        } catch (err) {
+          console.error('❌ Failed to delete S3 object:', err);
+        }
+      } else {
+        const pdfPath = path.join(__dirname, '../uploads', stored);
+        if (fs.existsSync(pdfPath)) {
+          fs.unlinkSync(pdfPath);
+        }
       }
     }
     
@@ -103,15 +128,28 @@ router.post('/reject-student/:id', async (req, res) => {
 });
 
 // Serve PDF files
-router.get('/pdf/:filename', (req, res) => {
+router.get('/pdf/:filename', async (req, res) => {
   try {
     const filename = req.params.filename;
+    // If S3 configured and filename looks like an S3 key, generate signed URL
+    if (s3Client && filename.startsWith('college-ids/')) {
+      try {
+        const { GetObjectCommand } = require('@aws-sdk/client-s3');
+        const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+        const command = new GetObjectCommand({ Bucket: S3_BUCKET, Key: filename });
+        const url = await getSignedUrl(s3Client, command, { expiresIn: 60 * 5 }); // 5 min
+        return res.json({ url });
+      } catch (err) {
+        console.error('❌ Failed to generate signed URL:', err);
+        return res.status(500).json({ error: 'Failed to generate file URL' });
+      }
+    }
+
     const filePath = path.join(__dirname, '../uploads', filename);
-    
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'File not found' });
     }
-    
+
     res.setHeader('Content-Type', 'application/pdf');
     res.sendFile(filePath);
   } catch (error) {
