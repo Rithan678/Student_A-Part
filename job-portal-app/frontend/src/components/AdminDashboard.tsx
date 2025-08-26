@@ -114,6 +114,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     setShowModal(true);
   };
 
+  // Open PDF: request backend which returns either a signed URL ({ url }) or serves the PDF directly.
+  const openPdf = async (pdfPath: string) => {
+    try {
+      const resp = await fetch(`${API_BASE_URL}${API_ENDPOINTS.getPdf}/${encodeURIComponent(pdfPath)}`);
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => null);
+        setError(data?.error || 'Failed to open document');
+        setTimeout(() => setError(''), 3000);
+        return;
+      }
+
+      const contentType = resp.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        // Likely { url }
+        const data = await resp.json();
+        if (data && data.url) {
+          window.open(data.url, '_blank');
+          return;
+        }
+      }
+
+      // Fallback: server returned PDF directly — open blob
+      const blob = await resp.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      // Revoke after some time
+      setTimeout(() => window.URL.revokeObjectURL(url), 60 * 1000);
+    } catch (err) {
+      console.error('Error opening PDF:', err);
+      setError('Failed to open document');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
   const getStats = () => {
     return {
       totalPending: pendingStudents.length,
@@ -497,7 +531,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                   <div style={styles.documentSection}>
                     <h5 style={styles.documentTitle}>College ID Document</h5>
                     <button
-                      onClick={() => window.open(`${API_BASE_URL}${API_ENDPOINTS.getPdf}/${selectedStudent.pdf_path}`, '_blank')}
+                      onClick={() => openPdf(selectedStudent.pdf_path)}
                       style={styles.viewDocumentButton}
                     >
                       📄 View PDF Document
